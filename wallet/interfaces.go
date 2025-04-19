@@ -38,12 +38,12 @@ type CreateActionInput struct {
 
 // CreateActionOutput represents an output to be created in a transaction
 type CreateActionOutput struct {
-	LockingScript      string // Hex encoded
-	Satoshis           uint64
-	OutputDescription  string
-	Basket             string
-	CustomInstructions string
-	Tags               []string
+	LockingScript      string   `json:"lockingScript,omitempty"` // Hex encoded
+	Satoshis           uint64   `json:"satoshis,omitempty"`
+	OutputDescription  string   `json:"outputDescription,omitempty"`
+	Basket             string   `json:"basket,omitempty"`
+	CustomInstructions string   `json:"customInstructions,omitempty"`
+	Tags               []string `json:"tags,omitempty"`
 }
 
 // CreateActionOptions contains optional parameters for creating a new transaction
@@ -61,14 +61,14 @@ type CreateActionOptions struct {
 
 // CreateActionArgs contains all data needed to create a new transaction
 type CreateActionArgs struct {
-	Description string
-	InputBEEF   []byte
-	Inputs      []CreateActionInput
-	Outputs     []CreateActionOutput
-	LockTime    uint32
-	Version     uint32
-	Labels      []string
-	Options     *CreateActionOptions
+	Description string               `json:"description"`
+	InputBEEF   []byte               `json:"inputBEEF,omitempty"`
+	Inputs      []CreateActionInput  `json:"inputs,omitempty"`
+	Outputs     []CreateActionOutput `json:"outputs,omitempty"`
+	LockTime    uint32               `json:"lockTime,omitempty"`
+	Version     uint32               `json:"version,omitempty"`
+	Labels      []string             `json:"labels,omitempty"`
+	Options     *CreateActionOptions `json:"options,omitempty"`
 }
 
 // CreateActionResult contains the results of creating a transaction
@@ -94,8 +94,8 @@ type SignableTransaction struct {
 
 // SignActionSpend provides the unlocking script and sequence number for a specific input.
 type SignActionSpend struct {
-	UnlockingScript string // Hex encoded
-	SequenceNumber  uint32
+	UnlockingScript string `json:"unlockingScript"` // Hex encoded
+	SequenceNumber  uint32 `json:"sequenceNumber,omitempty"`
 }
 
 // SignActionOptions controls signing and broadcasting behavior.
@@ -108,9 +108,9 @@ type SignActionOptions struct {
 
 // SignActionArgs contains data needed to sign a previously created transaction.
 type SignActionArgs struct {
-	Spends    map[uint32]SignActionSpend // Key is input index
-	Reference string                     // Base64 encoded
-	Options   *SignActionOptions
+	Reference string                     `json:"reference"` // Base64 encoded
+	Spends    map[uint32]SignActionSpend `json:"spends"`    // Key is input index
+	Options   *SignActionOptions         `json:"options,omitempty"`
 }
 
 // SignActionResult contains the output of a successful signing operation.
@@ -274,12 +274,13 @@ type Interface interface {
 
 // AbortActionArgs identifies a transaction to abort using its reference string.
 type AbortActionArgs struct {
-	Reference string // Base64 encoded reference
+	// TODO: Use []byte instead of Base64 encoded string, will automatically Marshall/Unmarshall to/from Base64
+	Reference []byte `json:"reference"` // Base64 encoded reference
 }
 
 // AbortActionResult confirms whether a transaction was successfully aborted.
 type AbortActionResult struct {
-	Aborted bool
+	Aborted bool `json:"aborted"`
 }
 
 // Payment contains derivation and identity data for wallet payment outputs.
