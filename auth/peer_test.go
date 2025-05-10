@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"log"
@@ -19,7 +20,7 @@ import (
 
 // MockTransport is a fake transport implementation for testing
 type MockTransport struct {
-	messageHandler   func(message *AuthMessage) error
+	messageHandler   func(ctx context.Context, message *AuthMessage) error
 	sentMessages     []*AuthMessage
 	sentMessagesChan chan *AuthMessage
 	mu               sync.Mutex
@@ -34,7 +35,7 @@ func NewMockTransport() *MockTransport {
 	}
 }
 
-func (t *MockTransport) Send(message *AuthMessage) error {
+func (t *MockTransport) Send(ctx context.Context, message *AuthMessage) error {
 	t.mu.Lock()
 	t.sentMessages = append(t.sentMessages, message)
 	t.mu.Unlock()
@@ -43,15 +44,23 @@ func (t *MockTransport) Send(message *AuthMessage) error {
 
 	if t.isPaired && t.pairedTransport != nil && t.pairedTransport.messageHandler != nil {
 		go func() {
-			_ = t.pairedTransport.messageHandler(message)
+			_ = t.pairedTransport.messageHandler(ctx, message)
 		}()
 	}
 	return nil
 }
 
-func (t *MockTransport) OnData(callback func(message *AuthMessage) error) error {
+func (t *MockTransport) OnData(callback func(context.Context, *AuthMessage) error) error {
 	t.messageHandler = callback
 	return nil
+}
+
+func (t *MockTransport) GetRegisteredOnData() (func(context.Context, *AuthMessage) error, error) {
+	if t.messageHandler == nil {
+		return nil, fmt.Errorf("no message handler registered")
+	}
+
+	return t.messageHandler, nil
 }
 
 func (t *MockTransport) GetSentMessages() []*AuthMessage {
@@ -325,7 +334,7 @@ func NewLoggingMockTransport(name string, logger *log.Logger) *LoggingMockTransp
 	}
 }
 
-func (t *LoggingMockTransport) Send(message *AuthMessage) error {
+func (t *LoggingMockTransport) Send(ctx context.Context, message *AuthMessage) error {
 	t.logger.Printf("[%s TRANSPORT] Sending message type: %s", t.name, message.MessageType)
 
 	// Log specifics based on message type
@@ -357,16 +366,16 @@ func (t *LoggingMockTransport) Send(message *AuthMessage) error {
 			t.logger.Printf("[%s TRANSPORT] Response includes %d certificates", t.name, len(message.Certificates))
 		}
 	}
-	return t.MockTransport.Send(message)
+	return t.MockTransport.Send(ctx, message)
 }
 
-func (t *LoggingMockTransport) OnData(callback func(message *AuthMessage) error) error {
-	wrappedCallback := func(message *AuthMessage) error {
+func (t *LoggingMockTransport) OnData(callback func(context.Context, *AuthMessage) error) error {
+	wrappedCallback := func(ctx context.Context, message *AuthMessage) error {
 		t.logger.Printf("[%s TRANSPORT] Received message type: %s", t.name, message.MessageType)
 		if message.IdentityKey != nil {
 			t.logger.Printf("[%s TRANSPORT] From identity key: %s", t.name, message.IdentityKey.ToDERHex())
 		}
-		return callback(message)
+		return callback(context.Background(), message)
 	}
 	return t.MockTransport.OnData(wrappedCallback)
 }
@@ -555,14 +564,14 @@ func TestPeerCertificateExchange(t *testing.T) {
 	})
 
 	// Set certificate requirements - We need to use the RAW type string here, not base64 encoded
-	aliceCertReqs := utils.RequestedCertificateSet{
+	aliceCertReqs := &utils.RequestedCertificateSet{
 		Certifiers: []string{"any"}, // "any" is special value that accepts any certifier
 		CertificateTypes: utils.RequestedCertificateTypeIDAndFieldList{
 			certType: []string{requiredField},
 		},
 	}
 
-	bobCertReqs := utils.RequestedCertificateSet{
+	bobCertReqs := &utils.RequestedCertificateSet{
 		Certifiers: []string{"any"}, // "any" is special value that accepts any certifier
 		CertificateTypes: utils.RequestedCertificateTypeIDAndFieldList{
 			certType: []string{requiredField},
@@ -626,7 +635,7 @@ func TestPeerCertificateExchange(t *testing.T) {
 	// Debug logs to check if Bob's transport is receiving requests
 	logger.Printf("Waiting for Bob to receive Alice's certificates...")
 	// Add explicit certificate request from Bob to Alice
-	err = bobPeer.RequestCertificates(ctx, alicePubKey, bobCertReqs, 1000)
+	err = bobPeer.RequestCertificates(ctx, alicePubKey, *bobCertReqs, 1000)
 	if err != nil {
 		logger.Printf("Error requesting certificates: %v", err)
 	} else {
@@ -985,7 +994,7 @@ func TestPartialCertificateAcceptance(t *testing.T) {
 	})
 
 	// Setup certificate requirements - requesting two fields but accepting partial matches
-	requestedCertificates := utils.RequestedCertificateSet{
+	requestedCertificates := &utils.RequestedCertificateSet{
 		Certifiers: []string{"any"},
 		CertificateTypes: utils.RequestedCertificateTypeIDAndFieldList{
 			certType: []string{"name", "email"},
@@ -1021,7 +1030,7 @@ func TestPartialCertificateAcceptance(t *testing.T) {
 		bobPubKey, _ := bobWallet.GetPublicKey(ctx, wallet.GetPublicKeyArgs{IdentityKey: true}, "")
 
 		// Bob requests certificates from Alice
-		err := bob.RequestCertificates(ctx, alicePubKey.PublicKey, requestedCertificates, 5000)
+		err := bob.RequestCertificates(ctx, alicePubKey.PublicKey, *requestedCertificates, 5000)
 		if err != nil {
 			t.Logf("Error when Bob requested certificates from Alice: %v", err)
 		} else {
@@ -1032,7 +1041,7 @@ func TestPartialCertificateAcceptance(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
 
 		// Alice requests certificates from Bob
-		err = alice.RequestCertificates(ctx, bobPubKey.PublicKey, requestedCertificates, 5000)
+		err = alice.RequestCertificates(ctx, bobPubKey.PublicKey, *requestedCertificates, 5000)
 		if err != nil {
 			t.Logf("Error when Alice requested certificates from Bob: %v", err)
 		} else {
@@ -1225,7 +1234,7 @@ func TestLibraryCardVerification(t *testing.T) {
 	})
 
 	// Setup certificate requirements - Alice requires Bob's library card number
-	alice.CertificatesToRequest = utils.RequestedCertificateSet{
+	alice.CertificatesToRequest = &utils.RequestedCertificateSet{
 		Certifiers: []string{"any"},
 		CertificateTypes: utils.RequestedCertificateTypeIDAndFieldList{
 			certType: []string{"cardNumber"},
