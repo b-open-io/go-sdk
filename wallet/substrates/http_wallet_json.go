@@ -245,7 +245,7 @@ func (h *HTTPWalletJSON) VerifySignature(ctx context.Context, args wallet.Verify
 }
 
 // AcquireCertificate acquires an identity certificate
-func (h *HTTPWalletJSON) AcquireCertificate(ctx context.Context, args wallet.AcquireCertificateArgs) (*wallet.Certificate, error) {
+func (h *HTTPWalletJSON) AcquireCertificate(ctx context.Context, args *wallet.AcquireCertificateArgs) (*wallet.Certificate, error) {
 	data, err := h.api(ctx, "acquireCertificate", args)
 	if err != nil {
 		return nil, err
@@ -267,7 +267,7 @@ func (h *HTTPWalletJSON) ListCertificates(ctx context.Context, args wallet.ListC
 }
 
 // ProveCertificate proves select fields of a certificate
-func (h *HTTPWalletJSON) ProveCertificate(ctx context.Context, args wallet.ProveCertificateArgs) (*wallet.ProveCertificateResult, error) {
+func (h *HTTPWalletJSON) ProveCertificate(ctx context.Context, args *wallet.ProveCertificateArgs) (*wallet.ProveCertificateResult, error) {
 	data, err := h.api(ctx, "proveCertificate", args)
 	if err != nil {
 		return nil, err
@@ -278,7 +278,7 @@ func (h *HTTPWalletJSON) ProveCertificate(ctx context.Context, args wallet.Prove
 }
 
 // RelinquishCertificate removes an identity certificate
-func (h *HTTPWalletJSON) RelinquishCertificate(ctx context.Context, args wallet.RelinquishCertificateArgs) (*wallet.RelinquishCertificateResult, error) {
+func (h *HTTPWalletJSON) RelinquishCertificate(ctx context.Context, args *wallet.RelinquishCertificateArgs) (*wallet.RelinquishCertificateResult, error) {
 	data, err := h.api(ctx, "relinquishCertificate", args)
 	if err != nil {
 		return nil, err

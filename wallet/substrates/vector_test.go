@@ -3,6 +3,7 @@ package substrates_test
 import (
 	"encoding/base64"
 	"encoding/json"
+	tu "github.com/bsv-blockchain/go-sdk/util/test_util"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -43,6 +44,19 @@ func TestVectors(t *testing.T) {
 	prover, err := ec.PublicKeyFromString(ProverHex)
 	require.NoError(t, err)
 
+	typeArray, err := tu.GetByte32FromBase64String("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB0ZXN0LXR5cGU=")
+	require.NoError(t, err)
+	serialArray, err := tu.GetByte32FromBase64String("AAAAAAAAAAAAAAAAAAB0ZXN0LXNlcmlhbC1udW1iZXI=")
+	require.NoError(t, err)
+	certifier, err := tu.GetByte33FromHexString("0294c479f762f6baa97fbcd4393564c1d7bd8336ebd15928135bbcf575cd1a71a1") // Use hex string from TS
+	require.NoError(t, err)
+
+	ref, err := base64.StdEncoding.DecodeString("dGVzdA==")
+	require.NoError(t, err)
+
+	outpoint, err := wallet.OutpointFromString("aec245f27b7640c8b1865045107731bfb848115c573f7da38166074b1c9e475d.0")
+	require.NoError(t, err)
+
 	// TODO: Add the rest of the test vector files
 	tests := []VectorTest{{
 		Filename: "abortAction-simple-args",
@@ -59,7 +73,7 @@ func TestVectors(t *testing.T) {
 		// TODO: This wire test is failing, I think also because of how ts-sdk handles -1
 		Filename: "signAction-simple-args",
 		Object: wallet.SignActionArgs{
-			Reference: "dGVzdA==",
+			Reference: ref,
 			Spends: map[uint32]wallet.SignActionSpend{
 				0: {
 					UnlockingScript: "76a91489abcdefabbaabbaabbaabbaabbaabbaabbaabba88ac",
@@ -407,11 +421,11 @@ func TestVectors(t *testing.T) {
 		Filename: "acquireCertificate-simple-args",
 		Object: wallet.AcquireCertificateArgs{
 			Type:                "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB0ZXN0LXR5cGU=",
-			Certifier:           "0294c479f762f6baa97fbcd4393564c1d7bd8336ebd15928135bbcf575cd1a71a1", // Use hex string from TS
+			Certifier:           certifier,
 			AcquisitionProtocol: wallet.AcquisitionProtocolIssuance,
 			Fields:              map[string]string{"name": "Alice", "email": "alice@example.com"},
 			SerialNumber:        "AAAAAAAAAAAAAAAAAAB0ZXN0LXNlcmlhbC1udW1iZXI=",
-			RevocationOutpoint:  "txid123:0",
+			RevocationOutpoint:  *outpoint,
 			Signature:           "sig-hex",
 			CertifierUrl:        "https://certifier.example.com",
 			KeyringRevealer:     "revealer-key-hex", // TODO: change to real hex, e.g. 319ee9fb4b2d9d84d2f5046986a12f29f163c5aa2db664a9b758e983837a321838
@@ -422,8 +436,8 @@ func TestVectors(t *testing.T) {
 		Filename: "acquireCertificate-simple-result",
 		IsResult: true,
 		Object: wallet.Certificate{
-			Type:               "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB0ZXN0LXR5cGU=",
-			SerialNumber:       "AAAAAAAAAAAAAAAAAAB0ZXN0LXNlcmlhbC1udW1iZXI=",
+			Type:               typeArray,
+			SerialNumber:       serialArray,
 			Subject:            pubKey,       // Use key from test setup
 			Certifier:          counterparty, // Use key from test setup
 			RevocationOutpoint: "txid123:0",
@@ -448,8 +462,8 @@ func TestVectors(t *testing.T) {
 			TotalCertificates: 1,
 			Certificates: []wallet.CertificateResult{{
 				Certificate: wallet.Certificate{
-					Type:               "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB0ZXN0LXR5cGU=",
-					SerialNumber:       "AAAAAAAAAAAAAAAAAAB0ZXN0LXNlcmlhbC1udW1iZXI=",
+					Type:               typeArray,
+					SerialNumber:       serialArray,
 					Subject:            pubKey,
 					Certifier:          counterparty,
 					RevocationOutpoint: "txid123:0",
@@ -464,8 +478,8 @@ func TestVectors(t *testing.T) {
 		Filename: "proveCertificate-simple-args",
 		Object: wallet.ProveCertificateArgs{
 			Certificate: wallet.Certificate{
-				Type:               "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB0ZXN0LXR5cGU=",
-				SerialNumber:       "AAAAAAAAAAAAAAAAAAB0ZXN0LXNlcmlhbC1udW1iZXI=",
+				Type:               typeArray,
+				SerialNumber:       serialArray,
 				Subject:            pubKey,       // Use key from test setup
 				Certifier:          counterparty, // Use key from test setup
 				RevocationOutpoint: "txid123:0",
@@ -486,9 +500,9 @@ func TestVectors(t *testing.T) {
 	}, {
 		Filename: "relinquishCertificate-simple-args",
 		Object: wallet.RelinquishCertificateArgs{
-			Type:         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB0ZXN0LXR5cGU=",
-			SerialNumber: "AAAAAAAAAAAAAAAAAAB0ZXN0LXNlcmlhbC1udW1iZXI=",
-			Certifier:    CounterpartyHex,
+			Type:         typeArray,
+			SerialNumber: serialArray,
+			Certifier:    certifier,
 		},
 	}, {
 		Filename: "relinquishCertificate-simple-result",
@@ -512,8 +526,8 @@ func TestVectors(t *testing.T) {
 			Certificates: []wallet.IdentityCertificate{
 				{
 					Certificate: wallet.Certificate{
-						Type:               "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB0ZXN0LXR5cGU=",
-						SerialNumber:       "AAAAAAAAAAAAAAAAAAB0ZXN0LXNlcmlhbC1udW1iZXI=",
+						Type:               wallet.Base64Bytes32(typeArray),
+						SerialNumber:       serialArray,
 						Subject:            pubKey,
 						Certifier:          counterparty,
 						RevocationOutpoint: "txid123:0",
@@ -524,7 +538,7 @@ func TestVectors(t *testing.T) {
 						Name:        "Test Certifier",
 						IconUrl:     "https://example.com/icon.png",
 						Description: "Certifier description",
-						Trust:       5, // Example trust level
+						Trust:       5,
 					},
 					PubliclyRevealedKeyring: map[string]string{"pubField": "pubKey"},
 					DecryptedFields:         map[string]string{"name": "Alice"},
@@ -547,8 +561,8 @@ func TestVectors(t *testing.T) {
 			Certificates: []wallet.IdentityCertificate{
 				{
 					Certificate: wallet.Certificate{
-						Type:               "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB0ZXN0LXR5cGU=",
-						SerialNumber:       "AAAAAAAAAAAAAAAAAAB0ZXN0LXNlcmlhbC1udW1iZXI=",
+						Type:               typeArray,
+						SerialNumber:       serialArray,
 						Subject:            pubKey,
 						Certifier:          counterparty,
 						RevocationOutpoint: "txid123:0",

@@ -21,13 +21,13 @@ func ValidateCertificateEncoding(cert wallet.Certificate) []string {
 	var errors []string
 
 	// Validate Type
-	if _, err := base64.StdEncoding.DecodeString(cert.Type); err != nil {
-		errors = append(errors, fmt.Sprintf("Type (%s) is not valid base64: %v", cert.Type, err))
+	if cert.Type == [32]byte{} {
+		errors = append(errors, fmt.Sprintf("Type (%s) is empty", cert.Type))
 	}
 
 	// Validate SerialNumber
-	if _, err := base64.StdEncoding.DecodeString(cert.SerialNumber); err != nil {
-		errors = append(errors, fmt.Sprintf("SerialNumber (%s) is not valid base64: %v", cert.SerialNumber, err))
+	if cert.SerialNumber == [32]byte{} {
+		errors = append(errors, fmt.Sprintf("SerialNumber (%s) is empty", cert.SerialNumber))
 	}
 
 	// Validate Fields
@@ -46,16 +46,6 @@ func ValidateCertificateEncoding(cert wallet.Certificate) []string {
 // This is useful for tests where certificates might be created with raw strings
 func GetEncodedCertificateForDebug(cert wallet.Certificate) wallet.Certificate {
 	result := cert
-
-	// Encode Type if necessary
-	if _, err := base64.StdEncoding.DecodeString(cert.Type); err != nil {
-		result.Type = base64.StdEncoding.EncodeToString([]byte(cert.Type))
-	}
-
-	// Encode SerialNumber if necessary
-	if _, err := base64.StdEncoding.DecodeString(cert.SerialNumber); err != nil {
-		result.SerialNumber = base64.StdEncoding.EncodeToString([]byte(cert.SerialNumber))
-	}
 
 	// Encode Fields if necessary
 	if cert.Fields != nil {
@@ -125,8 +115,8 @@ func SignCertificateForTest(ctx context.Context, cert wallet.Certificate, signer
 
 	// Convert wallet.Certificate to certificates.Certificate for signing
 	certObj := &certificates.Certificate{
-		Type:               wallet.Base64String(encodedCert.Type),
-		SerialNumber:       wallet.Base64String(encodedCert.SerialNumber),
+		Type:               wallet.Base64StringFromArray(encodedCert.Type),
+		SerialNumber:       wallet.Base64StringFromArray(encodedCert.SerialNumber),
 		Fields:             make(map[wallet.CertificateFieldNameUnder50Bytes]wallet.Base64String),
 		RevocationOutpoint: outpoint,
 	}
@@ -163,8 +153,8 @@ func SignCertificateForTest(ctx context.Context, cert wallet.Certificate, signer
 
 	// Convert back to wallet.Certificate format
 	finalCert := wallet.Certificate{
-		Type:               string(certObj.Type),
-		SerialNumber:       string(certObj.SerialNumber),
+		Type:               encodedCert.Type,
+		SerialNumber:       encodedCert.SerialNumber,
 		Subject:            &certObj.Subject,
 		Certifier:          &certObj.Certifier,
 		RevocationOutpoint: encodedCert.RevocationOutpoint,

@@ -22,17 +22,12 @@ func SerializeCertificate(cert *wallet.Certificate) ([]byte, error) {
 	w.WriteByte(0) // errorByte = 0 (success)
 
 	// Type (base64)
-	if err := w.WriteSizeFromBase64(cert.Type, sizeType); err != nil {
-		return nil, fmt.Errorf("invalid type base64: %w", err)
+	if cert.Type == [32]byte{} {
+		return nil, fmt.Errorf("cert type is empty")
 	}
-
+	w.WriteBytes(cert.Type[:])
 	w.WriteBytes(cert.Subject.Compressed())
-
-	// Serial number (base64)
-	if err := w.WriteSizeFromBase64(cert.SerialNumber, sizeSerial); err != nil {
-		return nil, fmt.Errorf("invalid serialNumber base64: %w", err)
-	}
-
+	w.WriteBytes(cert.SerialNumber[:])
 	w.WriteBytes(cert.Certifier.Compressed())
 
 	// Revocation outpoint
@@ -75,7 +70,7 @@ func DeserializeCertificate(data []byte) (cert *wallet.Certificate, err error) {
 	}
 
 	// Read type (base64)
-	cert.Type = r.ReadBase64(sizeType)
+	copy(cert.Type[:], r.ReadBytes(sizeType))
 
 	// Read subject (hex)
 	subjectBytes := r.ReadBytes(sizeSubject)
@@ -85,7 +80,7 @@ func DeserializeCertificate(data []byte) (cert *wallet.Certificate, err error) {
 	}
 
 	// Read serial number (base64)
-	cert.SerialNumber = r.ReadBase64(sizeSerial)
+	copy(cert.SerialNumber[:], r.ReadBytes(sizeSerial))
 
 	// Read certifier (hex)
 	cert.Certifier, err = ec.PublicKeyFromBytes(r.ReadBytes(sizeCertifier))

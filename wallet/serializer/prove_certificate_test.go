@@ -21,9 +21,9 @@ func TestProveCertificateArgs(t *testing.T) {
 		name: "full args",
 		args: &wallet.ProveCertificateArgs{
 			Certificate: wallet.Certificate{
-				Type:               base64.StdEncoding.EncodeToString(make([]byte, sizeType)),
+				Type:               [32]byte{0x1},
 				Subject:            pk.PubKey(),
-				SerialNumber:       base64.StdEncoding.EncodeToString(make([]byte, sizeType)),
+				SerialNumber:       [32]byte{0x2},
 				Certifier:          pk.PubKey(),
 				RevocationOutpoint: "0000000000000000000000000000000000000000000000000000000000000000.0",
 				Signature:          hex.EncodeToString(make([]byte, 64)),
@@ -41,9 +41,9 @@ func TestProveCertificateArgs(t *testing.T) {
 		name: "minimal args",
 		args: &wallet.ProveCertificateArgs{
 			Certificate: wallet.Certificate{
-				Type:               base64.StdEncoding.EncodeToString(make([]byte, sizeType)),
+				Type:               [32]byte{0x1},
 				Subject:            pk.PubKey(),
-				SerialNumber:       base64.StdEncoding.EncodeToString(make([]byte, sizeType)),
+				SerialNumber:       [32]byte{0x2},
 				Certifier:          pk.PubKey(),
 				RevocationOutpoint: "0000000000000000000000000000000000000000000000000000000000000000.0",
 				Signature:          hex.EncodeToString(make([]byte, 64)),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	tu "github.com/bsv-blockchain/go-sdk/util/test_util"
 	"log"
 	"os"
 	"strings"
@@ -404,7 +405,7 @@ func (t *LoggingMockTransport) OnData(callback func(context.Context, *AuthMessag
 
 // TestPeerCertificateExchange tests certificate request and exchange
 func TestPeerCertificateExchange(t *testing.T) {
-	certType := "testCertType"
+	var certType = tu.GetByte32FromString("testCertType")
 	requiredField := "testField"
 
 	// Setup logging
@@ -451,7 +452,7 @@ func TestPeerCertificateExchange(t *testing.T) {
 	// Create raw certificates with proper base64 encoding using our helper
 	aliceCertRaw := wallet.Certificate{
 		Type:               certType,
-		SerialNumber:       "serial1",
+		SerialNumber:       tu.GetByte32FromString("serial1"),
 		Subject:            aliceSubject,
 		Certifier:          bobSubject,
 		Fields:             map[string]string{requiredField: "fieldValue"},
@@ -460,7 +461,7 @@ func TestPeerCertificateExchange(t *testing.T) {
 
 	bobCertRaw := wallet.Certificate{
 		Type:               certType,
-		SerialNumber:       "serial2",
+		SerialNumber:       tu.GetByte32FromString("serial2"),
 		Subject:            bobSubject,
 		Certifier:          aliceSubject,
 		Fields:             map[string]string{requiredField: "fieldValue"},
@@ -907,7 +908,8 @@ func TestPeerMultiDeviceAuthentication(t *testing.T) {
 // if at least one required field is present
 func TestPartialCertificateAcceptance(t *testing.T) {
 	// Create a mock function to intercept certificate requests
-	certType := "identityCert"
+	var certType [32]byte
+	copy(certType[:], "identityCert")
 
 	// Create test wallets with recognizable identities
 	aliceKey, err := ec.NewPrivateKey()
@@ -941,7 +943,7 @@ func TestPartialCertificateAcceptance(t *testing.T) {
 	// Create raw certificates
 	aliceCertRaw := wallet.Certificate{
 		Type:               certType,
-		SerialNumber:       "alice-serial",
+		SerialNumber:       tu.GetByte32FromString("alice-serial"),
 		Subject:            aliceKey.PubKey(),
 		Certifier:          bobKey.PubKey(),
 		Fields:             map[string]string{"name": "Alice"},
@@ -950,7 +952,7 @@ func TestPartialCertificateAcceptance(t *testing.T) {
 
 	bobCertRaw := wallet.Certificate{
 		Type:               certType,
-		SerialNumber:       "bob-serial",
+		SerialNumber:       tu.GetByte32FromString("bob-serial"),
 		Subject:            bobKey.PubKey(),
 		Certifier:          aliceKey.PubKey(),
 		Fields:             map[string]string{"name": "Bob"},
@@ -1221,7 +1223,8 @@ func TestLibraryCardVerification(t *testing.T) {
 	t.Skip("Temporarily skipping until we fix signature verification issue")
 
 	// Create a mock function to intercept certificate requests
-	certType := "libraryCard"
+	var certType [32]byte
+	copy(certType[:], "libraryCard")
 
 	// Create test wallets with recognizable identities
 	aliceKey, err := ec.NewPrivateKey()
@@ -1255,7 +1258,7 @@ func TestLibraryCardVerification(t *testing.T) {
 	// Bob has a library card - first create raw
 	bobCertRaw := wallet.Certificate{
 		Type:               certType,
-		SerialNumber:       "lib-123456",
+		SerialNumber:       tu.GetByte32FromString("lib-123456"),
 		Subject:            bobKey.PubKey(),
 		Certifier:          aliceKey.PubKey(),
 		Fields:             map[string]string{"name": "Bob", "cardNumber": "123456"},
@@ -1575,11 +1578,16 @@ func TestNonmatchingCertificateRejection(t *testing.T) {
 		return &wallet.VerifySignatureResult{Valid: true}, nil
 	}
 
+	var certTypeA [32]byte
+	copy(certTypeA[:], "partnerA")
+	var certTypeB [32]byte
+	copy(certTypeB[:], "partnerB")
+
 	// Alice has "partnerA" certificate, Bob has "partnerB" certificate
 	// They shouldn't accept each other's certificates
 	aliceCertRaw := wallet.Certificate{
-		Type:               "partnerA",
-		SerialNumber:       "alice-serial",
+		Type:               certTypeA,
+		SerialNumber:       tu.GetByte32FromString("alice-serial"),
 		Subject:            aliceKey.PubKey(),
 		Certifier:          bobKey.PubKey(),
 		Fields:             map[string]string{"name": "Alice"},
@@ -1587,8 +1595,8 @@ func TestNonmatchingCertificateRejection(t *testing.T) {
 	}
 
 	bobCertRaw := wallet.Certificate{
-		Type:               "partnerB",
-		SerialNumber:       "bob-serial",
+		Type:               certTypeB,
+		SerialNumber:       tu.GetByte32FromString("bob-serial"),
 		Subject:            bobKey.PubKey(),
 		Certifier:          aliceKey.PubKey(),
 		Fields:             map[string]string{"name": "Bob"},
@@ -1655,14 +1663,14 @@ func TestNonmatchingCertificateRejection(t *testing.T) {
 	aliceRequiredCerts := utils.RequestedCertificateSet{
 		Certifiers: []string{"any"},
 		CertificateTypes: utils.RequestedCertificateTypeIDAndFieldList{
-			"partnerA": []string{"name"}, // Alice only accepts partnerA certs
+			certTypeA: []string{"name"}, // Alice only accepts partnerA certs
 		},
 	}
 
 	bobRequiredCerts := utils.RequestedCertificateSet{
 		Certifiers: []string{"any"},
 		CertificateTypes: utils.RequestedCertificateTypeIDAndFieldList{
-			"partnerB": []string{"name"}, // Bob only accepts partnerB certs
+			certTypeB: []string{"name"}, // Bob only accepts partnerB certs
 		},
 	}
 

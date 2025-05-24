@@ -2,17 +2,21 @@ package wallet
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/bsv-blockchain/go-sdk/chainhash"
+	"strconv"
+	"strings"
 
 	ec "github.com/bsv-blockchain/go-sdk/primitives/ec"
 )
 
 // Certificate represents a basic certificate in the wallet
 type Certificate struct {
-	Type               string            `json:"type"`                         // Base64-encoded certificate type ID
-	SerialNumber       string            `json:"serialNumber"`                 // Base64-encoded unique serial number
+	Type               Base64Bytes32     `json:"type"`                         // Base64-encoded certificate type ID
+	SerialNumber       Base64Bytes32     `json:"serialNumber"`                 // Base64-encoded unique serial number
 	Subject            *ec.PublicKey     `json:"subject"`                      // Public key of the certificate subject
 	Certifier          *ec.PublicKey     `json:"certifier"`                    // Public key of the certificate issuer
 	RevocationOutpoint string            `json:"revocationOutpoint,omitempty"` // Format: "txid:outputIndex"
@@ -33,7 +37,7 @@ func (c *Certificate) MarshalJSON() ([]byte, error) {
 		certifierHex = &cs
 	}
 
-	return json.Marshal(&struct {
+	res, err := json.Marshal(&struct {
 		Subject   *string `json:"subject"`
 		Certifier *string `json:"certifier"`
 		*Alias
@@ -42,6 +46,7 @@ func (c *Certificate) MarshalJSON() ([]byte, error) {
 		Certifier: certifierHex,
 		Alias:     (*Alias)(c),
 	})
+	return res, err
 }
 
 // UnmarshalJSON implements json.Unmarshaler interface for Certificate
@@ -56,7 +61,7 @@ func (c *Certificate) UnmarshalJSON(data []byte) error {
 	}
 
 	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
+		return fmt.Errorf("error unmarshaling certificate: %w", err)
 	}
 
 	// Decode public key hex strings
@@ -154,7 +159,7 @@ type SendWithResult struct {
 // SignableTransaction contains data needed to complete signing of a partial transaction.
 type SignableTransaction struct {
 	Tx        []byte
-	Reference string
+	Reference []byte
 }
 
 // SignActionSpend provides the unlocking script and sequence number for a specific input.
@@ -173,7 +178,7 @@ type SignActionOptions struct {
 
 // SignActionArgs contains data needed to sign a previously created transaction.
 type SignActionArgs struct {
-	Reference string                     `json:"reference"` // Base64 encoded
+	Reference []byte                     `json:"reference"` // Base64 encoded
 	Spends    map[uint32]SignActionSpend `json:"spends"`    // Key is input index
 	Options   *SignActionOptions         `json:"options,omitempty"`
 }
@@ -517,7 +522,7 @@ type IdentityCertificate struct {
 // It handles the flattening of the embedded Certificate fields.
 func (ic *IdentityCertificate) MarshalJSON() ([]byte, error) {
 	// Start with marshaling the embedded Certificate
-	certData, err := json.Marshal(ic.Certificate)
+	certData, err := json.Marshal(&ic.Certificate)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling embedded Certificate: %w", err)
 	}
@@ -599,11 +604,11 @@ const KeyringRevealerCertifier = "certifier"
 
 type AcquireCertificateArgs struct {
 	Type                string              `json:"type"`
-	Certifier           string              `json:"certifier"`
+	Certifier           HexBytes33          `json:"certifier"`
 	AcquisitionProtocol AcquisitionProtocol `json:"acquisitionProtocol"` // "direct" | "issuance"
 	Fields              map[string]string   `json:"fields,omitempty"`
 	SerialNumber        string              `json:"serialNumber"`
-	RevocationOutpoint  string              `json:"revocationOutpoint,omitempty"`
+	RevocationOutpoint  Outpoint            `json:"revocationOutpoint,omitempty"`
 	Signature           string              `json:"signature,omitempty"`
 	CertifierUrl        string              `json:"certifierUrl,omitempty"`
 	KeyringRevealer     string              `json:"keyringRevealer,omitempty"` // "certifier" | PubKeyHex
@@ -631,7 +636,7 @@ type CertificateResult struct {
 // It handles the flattening of the embedded Certificate fields.
 func (cr *CertificateResult) MarshalJSON() ([]byte, error) {
 	// Start with marshaling the embedded Certificate
-	certData, err := json.Marshal(cr.Certificate)
+	certData, err := json.Marshal(&cr.Certificate)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling embedded Certificate: %w", err)
 	}
@@ -691,9 +696,9 @@ type ListCertificatesResult struct {
 }
 
 type RelinquishCertificateArgs struct {
-	Type         string `json:"type"`
-	SerialNumber string `json:"serialNumber"`
-	Certifier    string `json:"certifier"`
+	Type         Base64Bytes32 `json:"type"`
+	SerialNumber Base64Bytes32 `json:"serialNumber"`
+	Certifier    HexBytes33    `json:"certifier"`
 }
 
 type RelinquishOutputArgs struct {
@@ -791,3 +796,125 @@ type ProveCertificateResult struct {
 type CertificateFieldNameUnder50Bytes string
 
 type Base64String string
+
+func (s Base64String) ToArray() ([32]byte, error) {
+	b, err := base64.StdEncoding.DecodeString(string(s))
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("error decoding base64 string: %w", err)
+	}
+
+	var arr [32]byte
+	if len(b) > 32 {
+		return arr, fmt.Errorf("string too long: %d", len(b))
+	}
+	if len(b) == 0 {
+		return arr, nil
+	}
+	copy(arr[:], b)
+	return arr, nil
+}
+
+func Base64StringFromArray(arr [32]byte) Base64String {
+	return Base64String(base64.StdEncoding.EncodeToString(arr[:]))
+}
+
+type Base64Bytes32 [32]byte
+
+func (b *Base64Bytes32) MarshalJSON() ([]byte, error) {
+	s := base64.StdEncoding.EncodeToString(b[:])
+	return json.Marshal(s)
+}
+
+func (b *Base64Bytes32) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	decoded, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return err
+	}
+	if len(decoded) != 32 {
+		return fmt.Errorf("expected 32 bytes, got %d", len(decoded))
+	}
+	copy(b[:], decoded)
+	return nil
+}
+
+type HexBytes33 [33]byte
+
+func (b *HexBytes33) MarshalJSON() ([]byte, error) {
+	s := hex.EncodeToString(b[:])
+	return json.Marshal(s)
+}
+
+func (b *HexBytes33) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	decoded, err := hex.DecodeString(s)
+	if err != nil {
+		return err
+	}
+	if len(decoded) != 33 {
+		return fmt.Errorf("expected 33 bytes, got %d", len(decoded))
+	}
+	copy(b[:], decoded)
+	return nil
+}
+
+type Outpoint struct {
+	Txid  chainhash.Hash
+	Index uint32
+}
+
+func (o *Outpoint) String() string {
+	txidHex := hex.EncodeToString(o.Txid[:])
+	return fmt.Sprintf("%s.%d", txidHex, o.Index)
+}
+
+func (o *Outpoint) MarshalJSON() ([]byte, error) {
+	return json.Marshal(o.String())
+}
+
+func (o *Outpoint) UnmarshalJSON(data []byte) error {
+	var outpointStr string
+	if err := json.Unmarshal(data, &outpointStr); err != nil {
+		return fmt.Errorf("error unmarshaling outpoint string: %w", err)
+	}
+	outpoint, err := OutpointFromString(outpointStr)
+	if err != nil {
+		return fmt.Errorf("error parsing outpoint string: %w", err)
+	}
+	o.Txid = outpoint.Txid
+	o.Index = outpoint.Index
+	return nil
+}
+
+func OutpointFromString(s string) (*Outpoint, error) {
+	var outpoint = new(Outpoint)
+	if len(s) == 0 {
+		return outpoint, nil
+	}
+	parts := strings.Split(s, ".")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid outpoint format: %s", s)
+	}
+
+	txidBytes, err := hex.DecodeString(parts[0])
+	if err != nil {
+		return nil, fmt.Errorf("invalid txid hex: %w", err)
+	}
+	if len(txidBytes) != chainhash.HashSize {
+		return nil, fmt.Errorf("invalid txid length: %d", len(txidBytes))
+	}
+	copy(outpoint.Txid[:], txidBytes)
+
+	index, err := strconv.ParseUint(parts[1], 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("invalid output index: %w", err)
+	}
+	outpoint.Index = uint32(index)
+	return outpoint, nil
+}
