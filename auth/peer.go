@@ -21,7 +21,7 @@ import (
 )
 
 // AUTH_PROTOCOL_ID is the protocol ID for authentication messages as specified in BRC-31 (Authrite)
-const AUTH_PROTOCOL_ID = "authrite message signature"
+const AUTH_PROTOCOL_ID = "auth message signature"
 
 // AUTH_VERSION is the version of the auth protocol
 const AUTH_VERSION = "0.1"
@@ -495,7 +495,7 @@ func (p *Peer) handleInitialRequest(ctx context.Context, message *AuthMessage, s
 		IdentityKey:  identityKeyResult.PublicKey,
 		Nonce:        ourNonce,
 		YourNonce:    message.InitialNonce,
-		InitialNonce: message.InitialNonce,
+		InitialNonce: session.SessionNonce,
 		Certificates: certs,
 	}
 
@@ -537,8 +537,11 @@ func (p *Peer) handleInitialRequest(ctx context.Context, message *AuthMessage, s
 
 // handleInitialResponse processes the response to our initial authentication request
 func (p *Peer) handleInitialResponse(ctx context.Context, message *AuthMessage, senderPublicKey *ec.PublicKey) error {
-	// Validate the response has required nonces
-	if message.YourNonce == "" || message.InitialNonce == "" {
+	valid, err := utils.VerifyNonce(ctx, message.YourNonce, p.wallet, wallet.Counterparty{Type: wallet.CounterpartyTypeSelf})
+	if err != nil {
+		return fmt.Errorf("failed to validate nonce: %w", err)
+	}
+	if !valid {
 		return ErrInvalidNonce
 	}
 
@@ -606,8 +609,11 @@ func (p *Peer) handleCertificateRequest(ctx context.Context, message *AuthMessag
 		return ErrSessionNotFound
 	}
 
-	// Verify nonces match
-	if message.YourNonce != session.SessionNonce {
+	valid, err := utils.VerifyNonce(ctx, message.YourNonce, p.wallet, wallet.Counterparty{Type: wallet.CounterpartyTypeSelf})
+	if err != nil {
+		return fmt.Errorf("failed to validate nonce: %w", err)
+	}
+	if !valid {
 		return ErrInvalidNonce
 	}
 
@@ -694,8 +700,11 @@ func (p *Peer) handleCertificateResponse(ctx context.Context, message *AuthMessa
 		return ErrSessionNotFound
 	}
 
-	// Verify nonces match
-	if message.YourNonce != session.SessionNonce {
+	valid, err := utils.VerifyNonce(ctx, message.YourNonce, p.wallet, wallet.Counterparty{Type: wallet.CounterpartyTypeSelf})
+	if err != nil {
+		return fmt.Errorf("failed to validate nonce: %w", err)
+	}
+	if !valid {
 		return ErrInvalidNonce
 	}
 
@@ -784,27 +793,19 @@ func (p *Peer) handleCertificateResponse(ctx context.Context, message *AuthMessa
 
 // handleGeneralMessage processes a general message
 func (p *Peer) handleGeneralMessage(ctx context.Context, message *AuthMessage, senderPublicKey *ec.PublicKey) error {
+	valid, err := utils.VerifyNonce(ctx, message.YourNonce, p.wallet, wallet.Counterparty{Type: wallet.CounterpartyTypeSelf})
+	if err != nil {
+		return fmt.Errorf("failed to validate nonce: %w", err)
+	}
+	if !valid {
+		return ErrInvalidNonce
+	}
+
 	// Validate the session exists and is authenticated
 	session, err := p.sessionManager.GetSession(senderPublicKey.ToDERHex())
 	if err != nil || session == nil {
 		return ErrSessionNotFound
 	}
-	if !session.IsAuthenticated {
-		if p.CertificatesToRequest != nil && len(p.CertificatesToRequest.Certifiers) > 0 {
-			return ErrMissingCertificate
-		}
-
-		return ErrNotAuthenticated
-	}
-
-	// Verify nonces match
-	if message.YourNonce != session.SessionNonce {
-		return ErrInvalidNonce
-	}
-
-	// Update session timestamp
-	session.LastUpdate = time.Now().UnixMilli()
-	p.sessionManager.UpdateSession(session)
 
 	// Try to parse the signature
 	sig, err := ec.ParseSignature(message.Signature)
@@ -833,6 +834,10 @@ func (p *Peer) handleGeneralMessage(ctx context.Context, message *AuthMessage, s
 	if err != nil || !verifyResult.Valid {
 		return fmt.Errorf("invalid signature in general message: %w", err)
 	}
+
+	// Update session timestamp
+	session.LastUpdate = time.Now().UnixMilli()
+	p.sessionManager.UpdateSession(session)
 
 	// Update last interacted peer
 	if p.autoPersistLastSession {
