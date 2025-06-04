@@ -499,6 +499,38 @@ func (p *Peer) handleInitialRequest(ctx context.Context, message *AuthMessage, s
 		Certificates: certs,
 	}
 
+	data := fmt.Sprintf("%s%s", message.InitialNonce, session.SessionNonce)
+	sigData, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		return NewAuthError("failed to prepare data to sign", err)
+	}
+
+	keyID := fmt.Sprintf("%s %s", message.InitialNonce, session.SessionNonce)
+
+	arg := wallet.CreateSignatureArgs{
+		EncryptionArgs: wallet.EncryptionArgs{
+			ProtocolID: wallet.Protocol{
+				// SecurityLevel set to 2 (SecurityLevelEveryAppAndCounterparty) as specified in BRC-31 (Authrite)
+				SecurityLevel: wallet.SecurityLevelEveryAppAndCounterparty,
+				Protocol:      AUTH_PROTOCOL_ID,
+			},
+			KeyID: keyID,
+			Counterparty: wallet.Counterparty{
+				Type:         wallet.CounterpartyTypeOther,
+				Counterparty: message.IdentityKey,
+			},
+		},
+		// Sign the certificate request data, as in TypeScript
+		Data: sigData,
+	}
+
+	sigResult, err := p.wallet.CreateSignature(ctx, arg, "")
+	if err != nil {
+		return fmt.Errorf("failed to sign initial response: %w", err)
+	}
+
+	response.Signature = sigResult.Signature.Serialize()
+
 	// Send the response
 	return p.transport.Send(ctx, response)
 }
