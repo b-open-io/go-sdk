@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	ec "github.com/bsv-blockchain/go-sdk/primitives/ec"
+	"github.com/bsv-blockchain/go-sdk/util"
 	tu "github.com/bsv-blockchain/go-sdk/util/test_util"
 	"github.com/bsv-blockchain/go-sdk/wallet"
 	"github.com/stretchr/testify/require"
@@ -248,7 +249,7 @@ func TestHTTPWalletJSON_ListActions(t *testing.T) {
 		err := json.NewDecoder(r.Body).Decode(&args)
 		require.NoError(t, err)
 		require.Equal(t, []string{"test-label"}, args.Labels)
-		require.Equal(t, uint32(10), args.Limit)
+		require.Equal(t, util.Uint32Ptr(uint32(10)), args.Limit)
 
 		writeJSONResponse(t, w, wallet.ListActionsResult{
 			TotalActions: 1,
@@ -265,7 +266,7 @@ func TestHTTPWalletJSON_ListActions(t *testing.T) {
 	client := NewHTTPWalletJSON("", ts.URL, nil)
 	result, err := client.ListActions(t.Context(), wallet.ListActionsArgs{
 		Labels: []string{"test-label"},
-		Limit:  10,
+		Limit:  util.Uint32Ptr(10),
 	})
 	require.NoError(t, err)
 	require.Equal(t, uint32(1), result.TotalActions)
