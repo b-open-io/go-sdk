@@ -16,6 +16,8 @@ import (
 	"github.com/bsv-blockchain/go-sdk/util"
 	tu "github.com/bsv-blockchain/go-sdk/util/test_util"
 	"github.com/bsv-blockchain/go-sdk/wallet"
+	"github.com/bsv-blockchain/go-sdk/wallet/serializer"
+	"github.com/bsv-blockchain/go-sdk/wallet/substrates"
 	"github.com/stretchr/testify/require"
 )
 
@@ -103,10 +105,9 @@ func TestVectors(t *testing.T) {
 		},
 	}, {
 		Filename: "listActions-simple-args",
-		IsResult: true,
 		Object: wallet.ListActionsArgs{
 			Labels:         []string{"test-label"},
-			Limit:          10,
+			Limit:          util.Uint32Ptr(10),
 			IncludeOutputs: util.BoolPtr(true),
 		},
 	}, {
@@ -142,9 +143,9 @@ func TestVectors(t *testing.T) {
 					OutputIndex: 0,
 					Protocol:    wallet.InternalizeProtocolWalletPayment,
 					PaymentRemittance: &wallet.Payment{
-						DerivationPrefix:  "prefix",
-						DerivationSuffix:  "suffix",
-						SenderIdentityKey: "sender-key",
+						DerivationPrefix:  []byte("prefix"),
+						DerivationSuffix:  []byte("suffix"),
+						SenderIdentityKey: verifier,
 					},
 				},
 				{
@@ -169,14 +170,13 @@ func TestVectors(t *testing.T) {
 		},
 	}, {
 		Filename: "listOutputs-simple-args",
-		IsResult: true,
 		Object: wallet.ListOutputsArgs{
 			Basket:       "test-basket",
 			Tags:         []string{"tag1", "tag2"},
 			TagQueryMode: wallet.QueryModeAny,
 			Include:      wallet.OutputIncludeLockingScripts,
 			IncludeTags:  util.BoolPtr(true),
-			Limit:        10,
+			Limit:        util.Uint32Ptr(10),
 		},
 	}, {
 		Filename: "listOutputs-simple-result",
@@ -190,13 +190,12 @@ func TestVectors(t *testing.T) {
 				Outpoint:  *tu.OutpointFromString(t, fmt.Sprintf("%s.0", txID)),
 			}, {
 				Satoshis:  5000,
-				Spendable: false,
+				Spendable: true,
 				Outpoint:  *tu.OutpointFromString(t, "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890.2"),
 			}},
 		},
 	}, {
 		Filename: "relinquishOutput-simple-args",
-		IsResult: true,
 		Object: wallet.RelinquishOutputArgs{
 			Basket: "test-basket",
 			Output: *tu.OutpointFromString(t, "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890.2"),
@@ -210,7 +209,6 @@ func TestVectors(t *testing.T) {
 	}, {
 		Filename: "getPublicKey-simple-args",
 		Object: wallet.GetPublicKeyArgs{
-			IdentityKey: true,
 			EncryptionArgs: wallet.EncryptionArgs{
 				ProtocolID: wallet.Protocol{
 					SecurityLevel: wallet.SecurityLevelEveryAppAndCounterparty,
@@ -347,7 +345,10 @@ func TestVectors(t *testing.T) {
 		Filename: "createHMAC-simple-result",
 		IsResult: true,
 		Object: wallet.CreateHMACResult{
-			HMAC: []byte{50, 60, 70, 80, 90, 100, 110, 120},
+			HMAC: [32]byte{50, 60, 70, 80, 90, 100, 110, 120,
+				50, 60, 70, 80, 90, 100, 110, 120,
+				50, 60, 70, 80, 90, 100, 110, 120,
+				50, 60, 70, 80, 90, 100, 110, 120},
 		},
 	}, {
 		Filename: "verifyHMAC-simple-args",
@@ -364,7 +365,10 @@ func TestVectors(t *testing.T) {
 				SeekPermission:   true,
 			},
 			Data: []byte{10, 20, 30, 40},
-			HMAC: []byte{50, 60, 70, 80, 90, 100, 110, 120},
+			HMAC: [32]byte{50, 60, 70, 80, 90, 100, 110, 120,
+				50, 60, 70, 80, 90, 100, 110, 120,
+				50, 60, 70, 80, 90, 100, 110, 120,
+				50, 60, 70, 80, 90, 100, 110, 120},
 		},
 	}, {
 		Filename: "verifyHMAC-simple-result",
@@ -453,8 +457,8 @@ func TestVectors(t *testing.T) {
 		Object: wallet.ListCertificatesArgs{
 			Certifiers:       []*ec.PublicKey{counterparty, verifier},
 			Types:            []wallet.CertificateType{tu.GetByte32FromBase64String(t, "dGVzdC10eXBlMSAgICAgICAgICAgICAgICAgICAgICA="), tu.GetByte32FromBase64String(t, "dGVzdC10eXBlMiAgICAgICAgICAgICAgICAgICAgICA=")},
-			Limit:            5,
-			Offset:           0,
+			Limit:            util.Uint32Ptr(5),
+			Offset:           nil,
 			Privileged:       util.BoolPtr(true),
 			PrivilegedReason: "list-cert-reason",
 		},
@@ -517,8 +521,8 @@ func TestVectors(t *testing.T) {
 		Filename: "discoverByIdentityKey-simple-args",
 		Object: wallet.DiscoverByIdentityKeyArgs{
 			IdentityKey:    counterparty,
-			Limit:          10,
-			Offset:         0,
+			Limit:          util.Uint32Ptr(10),
+			Offset:         nil,
 			SeekPermission: util.BoolPtr(true),
 		},
 	}, {
@@ -552,8 +556,8 @@ func TestVectors(t *testing.T) {
 		Filename: "discoverByAttributes-simple-args",
 		Object: wallet.DiscoverByAttributesArgs{
 			Attributes:     map[string]string{"email": "alice@example.com", "role": "admin"},
-			Limit:          5,
-			Offset:         0,
+			Limit:          util.Uint32Ptr(5),
+			Offset:         nil,
 			SeekPermission: util.BoolPtr(false),
 		},
 	}, {
@@ -673,7 +677,7 @@ func TestVectors(t *testing.T) {
 			// For now serializer tests verify wire objects are consistent between serializing and deserializing
 
 			// Test wire format serialization
-			/*t.Run("Wire", func(t *testing.T) {
+			t.Run("Wire", func(t *testing.T) {
 				var wireString string
 				require.NoError(t, json.Unmarshal(vectorFile["wire"], &wireString))
 				wire, err := hex.DecodeString(wireString)
@@ -694,9 +698,10 @@ func TestVectors(t *testing.T) {
 				}
 
 				// Define a function to check wire serialization and deserialization
-				checkWireSerialize := func(call substrates.Call, obj any, serialized []byte, err1 error, deserialized any, err2 error) {
-					require.Equal(t, frameCall, call)
-					require.NoError(t, err1)
+				checkWireSerialize := func(call substrates.Call, obj any,
+					serialized []byte, errSerialize error, deserialized any, errDeserialize error) {
+					require.Equal(t, frameCall, call, "Frame call mismatch")
+					require.NoError(t, errSerialize, "Serializing object error")
 					var serializedWithFrame []byte
 					if tt.IsResult {
 						serializedWithFrame = serializer.WriteResultFrame(serialized, nil)
@@ -706,9 +711,9 @@ func TestVectors(t *testing.T) {
 							Params: serialized,
 						})
 					}
-					require.Equal(t, wire, serializedWithFrame)
-					require.NoError(t, err2)
-					require.EqualValues(t, obj, deserialized)
+					require.Equal(t, wire, serializedWithFrame, "Serialized wire mismatch")
+					require.NoError(t, errDeserialize, "Deserializing wire error")
+					require.EqualValues(t, obj, deserialized, "Deserialized object mismatch")
 				}
 
 				// Serialize and deserialize using the wire binary format
@@ -854,10 +859,58 @@ func TestVectors(t *testing.T) {
 					serialized, err1 := serializer.SerializeGetVersionResult(&obj)
 					deserialized, err2 := serializer.DeserializeGetVersionResult(frameParams)
 					checkWireSerialize(0, &obj, serialized, err1, deserialized, err2)
+				case wallet.GetPublicKeyArgs:
+					serialized, err1 := serializer.SerializeGetPublicKeyArgs(&obj)
+					deserialized, err2 := serializer.DeserializeGetPublicKeyArgs(frameParams)
+					checkWireSerialize(substrates.CallGetPublicKey, &obj, serialized, err1, deserialized, err2)
+				case wallet.GetPublicKeyResult:
+					serialized, err1 := serializer.SerializeGetPublicKeyResult(&obj)
+					deserialized, err2 := serializer.DeserializeGetPublicKeyResult(frameParams)
+					checkWireSerialize(0, &obj, serialized, err1, deserialized, err2)
+				case wallet.RevealCounterpartyKeyLinkageArgs:
+					serialized, err1 := serializer.SerializeRevealCounterpartyKeyLinkageArgs(&obj)
+					deserialized, err2 := serializer.DeserializeRevealCounterpartyKeyLinkageArgs(frameParams)
+					checkWireSerialize(substrates.CallRevealCounterpartyKeyLinkage, &obj, serialized, err1, deserialized, err2)
+				case wallet.RevealCounterpartyKeyLinkageResult:
+					serialized, err1 := serializer.SerializeRevealCounterpartyKeyLinkageResult(&obj)
+					deserialized, err2 := serializer.DeserializeRevealCounterpartyKeyLinkageResult(frameParams)
+					checkWireSerialize(0, &obj, serialized, err1, deserialized, err2)
+				case wallet.RevealSpecificKeyLinkageArgs:
+					serialized, err1 := serializer.SerializeRevealSpecificKeyLinkageArgs(&obj)
+					deserialized, err2 := serializer.DeserializeRevealSpecificKeyLinkageArgs(frameParams)
+					checkWireSerialize(substrates.CallRevealSpecificKeyLinkage, &obj, serialized, err1, deserialized, err2)
+				case wallet.RevealSpecificKeyLinkageResult:
+					serialized, err1 := serializer.SerializeRevealSpecificKeyLinkageResult(&obj)
+					deserialized, err2 := serializer.DeserializeRevealSpecificKeyLinkageResult(frameParams)
+					checkWireSerialize(0, &obj, serialized, err1, deserialized, err2)
+				case wallet.ListActionsArgs:
+					serialized, err1 := serializer.SerializeListActionsArgs(&obj)
+					deserialized, err2 := serializer.DeserializeListActionsArgs(frameParams)
+					checkWireSerialize(substrates.CallListActions, &obj, serialized, err1, deserialized, err2)
+				case wallet.ListActionsResult:
+					serialized, err1 := serializer.SerializeListActionsResult(&obj)
+					deserialized, err2 := serializer.DeserializeListActionsResult(frameParams)
+					checkWireSerialize(0, &obj, serialized, err1, deserialized, err2)
+				case wallet.ListOutputsArgs:
+					serialized, err1 := serializer.SerializeListOutputsArgs(&obj)
+					deserialized, err2 := serializer.DeserializeListOutputsArgs(frameParams)
+					checkWireSerialize(substrates.CallListOutputs, &obj, serialized, err1, deserialized, err2)
+				case wallet.ListOutputsResult:
+					serialized, err1 := serializer.SerializeListOutputsResult(&obj)
+					deserialized, err2 := serializer.DeserializeListOutputsResult(frameParams)
+					checkWireSerialize(0, &obj, serialized, err1, deserialized, err2)
+				case wallet.RelinquishOutputArgs:
+					serialized, err1 := serializer.SerializeRelinquishOutputArgs(&obj)
+					deserialized, err2 := serializer.DeserializeRelinquishOutputArgs(frameParams)
+					checkWireSerialize(substrates.CallRelinquishOutput, &obj, serialized, err1, deserialized, err2)
+				case wallet.RelinquishOutputResult:
+					serialized, err1 := serializer.SerializeRelinquishOutputResult(&obj)
+					deserialized, err2 := serializer.DeserializeRelinquishOutputResult(frameParams)
+					checkWireSerialize(0, &obj, serialized, err1, deserialized, err2)
 				default:
 					t.Fatalf("Unsupported object type: %T", obj)
 				}
-			})*/
+			})
 		})
 	}
 }
