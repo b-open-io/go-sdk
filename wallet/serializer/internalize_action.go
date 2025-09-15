@@ -31,8 +31,8 @@ func SerializeInternalizeActionArgs(args *wallet.InternalizeActionArgs) ([]byte,
 			}
 			w.WriteByte(internalizeActionProtocolWalletPayment)
 			w.WriteBytes(output.PaymentRemittance.SenderIdentityKey.Compressed())
-			w.WriteIntBytes(output.PaymentRemittance.DerivationPrefix)
-			w.WriteIntBytes(output.PaymentRemittance.DerivationSuffix)
+			w.WriteIntBytes([]byte(output.PaymentRemittance.DerivationPrefix))
+			w.WriteIntBytes([]byte(output.PaymentRemittance.DerivationSuffix))
 		} else {
 			// Basket insertion remittance
 			if output.InsertionRemittance == nil {
@@ -82,8 +82,8 @@ func DeserializeInternalizeActionArgs(data []byte) (*wallet.InternalizeActionArg
 			}
 			output.PaymentRemittance = &wallet.Payment{
 				SenderIdentityKey: senderIdentityKey,
-				DerivationPrefix:  r.ReadIntBytes(),
-				DerivationSuffix:  r.ReadIntBytes(),
+				DerivationPrefix:  string(r.ReadIntBytes()),
+				DerivationSuffix:  string(r.ReadIntBytes()),
 			}
 		case internalizeActionProtocolBasketInsertion:
 			output.Protocol = wallet.InternalizeProtocolBasketInsertion

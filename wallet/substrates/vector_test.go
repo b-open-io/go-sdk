@@ -147,8 +147,8 @@ func TestVectors(t *testing.T) {
 					OutputIndex: 0,
 					Protocol:    wallet.InternalizeProtocolWalletPayment,
 					PaymentRemittance: &wallet.Payment{
-						DerivationPrefix:  []byte("prefix"),
-						DerivationSuffix:  []byte("suffix"),
+						DerivationPrefix:  "prefix",
+						DerivationSuffix:  "suffix",
 						SenderIdentityKey: verifier,
 					},
 				},
