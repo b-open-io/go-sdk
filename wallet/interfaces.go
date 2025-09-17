@@ -386,8 +386,8 @@ type AbortActionResult struct {
 
 // Payment contains derivation and identity data for wallet payment outputs.
 type Payment struct {
-	DerivationPrefix  []byte        `json:"derivationPrefix"`
-	DerivationSuffix  []byte        `json:"derivationSuffix"`
+	DerivationPrefix  string        `json:"derivationPrefix"`
+	DerivationSuffix  string        `json:"derivationSuffix"`
 	SenderIdentityKey *ec.PublicKey `json:"senderIdentityKey"`
 }
 

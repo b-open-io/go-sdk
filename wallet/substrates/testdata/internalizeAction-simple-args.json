@@ -17,8 +17,8 @@
         "outputIndex": 0,
         "protocol": "wallet payment",
         "paymentRemittance": {
-          "derivationPrefix": "cHJlZml4",
-          "derivationSuffix": "c3VmZml4",
+          "derivationPrefix": "prefix",
+          "derivationSuffix": "suffix",
           "senderIdentityKey": "03b106dae20ae8fca0f4e8983d974c4b583054573eecdcdcfad261c035415ce1ee"
         }
       },
