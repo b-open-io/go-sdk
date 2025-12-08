@@ -18,6 +18,7 @@ var (
 type OutputListItem struct {
 	Beef        []byte `json:"beef"`
 	OutputIndex uint32 `json:"outputIndex"`
+	Context     []byte `json:"context,omitempty"`
 }
 
 // LookupQuestion represents a question asked to an overlay lookup service
