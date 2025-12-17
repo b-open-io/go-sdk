@@ -151,7 +151,7 @@ func (f *HTTPSOverlayLookupFacilitator) parseAggregatedResponse(body io.Reader) 
 		if err != nil {
 			continue
 		}
-		beefBytes, err := txBeef.Bytes()
+		beefBytes, err := txBeef.AtomicBytes(tx.TxID())
 		if err != nil {
 			continue
 		}
