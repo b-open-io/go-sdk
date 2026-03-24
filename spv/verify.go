@@ -18,6 +18,21 @@ func Verify(ctx context.Context, t *transaction.Transaction,
 		chainTracker = chaintracker.NewWhatsOnChain(chaintracker.MainNet, "")
 	}
 
+	// Validate fees only on the root transaction, not ancestors
+	if feeModel != nil {
+		txFee, err := t.GetFee()
+		if err != nil {
+			return false, err
+		}
+		requiredFee, err := feeModel.ComputeFee(t)
+		if err != nil {
+			return false, err
+		}
+		if txFee < requiredFee {
+			return false, fmt.Errorf("%w: paid %d, required %d", ErrFeeTooLow, txFee, requiredFee)
+		}
+	}
+
 	for len(txQueue) > 0 {
 		tx := txQueue[0]
 		txQueue = txQueue[1:]
@@ -35,23 +50,7 @@ func Verify(ctx context.Context, t *transaction.Transaction,
 				verifiedTxids[txidStr] = struct{}{}
 				continue
 			} else {
-				return false, fmt.Errorf("invalid merkle path for transaction %s", txidStr)
-			}
-		}
-
-		if feeModel != nil {
-			clone := tx.ShallowClone()
-			clone.Outputs[0].Change = true
-			if err := clone.Fee(feeModel, transaction.ChangeDistributionEqual); err != nil {
-				return false, err
-			}
-			tx.TotalOutputSatoshis()
-			if txFee, err := tx.GetFee(); err != nil {
-				return false, err
-			} else if cloneFee, err := clone.GetFee(); err != nil {
-				return false, err
-			} else if cloneFee < txFee {
-				return false, fmt.Errorf("fee is too low")
+				return false, fmt.Errorf("%w for transaction %s", ErrInvalidMerklePath, txidStr)
 			}
 		}
 
@@ -59,7 +58,7 @@ func Verify(ctx context.Context, t *transaction.Transaction,
 		for vin, input := range tx.Inputs {
 			sourceOutput := input.SourceTxOutput()
 			if sourceOutput == nil {
-				return false, fmt.Errorf("input %d has no source transaction", vin)
+				return false, fmt.Errorf("%w: input %d", ErrMissingSourceTransaction, vin)
 			}
 			inputTotal += sourceOutput.Satoshis
 
@@ -74,8 +73,7 @@ func Verify(ctx context.Context, t *transaction.Transaction,
 				interpreter.WithForkID(),
 				interpreter.WithAfterGenesis(),
 			); err != nil {
-				fmt.Println(err)
-				return false, err
+				return false, fmt.Errorf("%w: %w", ErrScriptVerificationFailed, err)
 			}
 		}
 	}

@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ## Table of Contents
 
+- [1.2.18 - 2026-02-12](#1218---2026-02-12)
+- [1.2.17 - 2026-02-06](#1217---2026-02-06)
+- [1.2.16 - 2026-01-29](#1216---2026-01-29)
+- [1.2.15 - 2026-01-27](#1215---2026-01-27)
+- [1.2.14 - 2025-12-19](#1214---2025-12-19)
 - [1.2.13 - 2025-12-05](#1213---2025-12-05)
 - [1.2.12 - 2025-11-12](#1212---2025-11-12)
 - [1.2.11 - 2025-10-27](#1211---2025-10-27)
@@ -47,6 +52,60 @@ All notable changes to this project will be documented in this file. The format 
 - [1.1.1 - 2024-08-28](#111---2024-08-28)
 - [1.1.0 - 2024-08-19](#110---2024-08-19)
 - [1.0.0 - 2024-06-06](#100---2024-06-06)
+
+## [1.2.18] - 2026-02-12
+
+### Fixed
+- BIP276 decoding: corrected field order to match spec, fixed prefix validation and network byte parsing (#286)
+- AuthFetch data race: replaced plain map with `sync.Map` for thread-safe nonce tracking (#262)
+- CodeQL integer conversion security alerts in BIP276 (#286)
+
+### Added
+- Test for large stack data NUM2BIN operations (#261)
+
+## [1.2.17] - 2026-02-06
+
+### Added
+- Optional `Reference` field on `CreateActionArgs` and `ListActionsArgs` for associating custom reference identifiers with wallet actions (#289)
+- `ReadOptionalString` method on `ReaderHoldError` for deserializing optional string fields
+
+## [1.2.16] - 2026-01-29
+
+### Added
+- Typed sentinel errors for SPV package: `ErrFeeTooLow`, `ErrInvalidMerklePath`, `ErrMissingSourceTransaction`, `ErrScriptVerificationFailed`
+- Typed sentinel error for certificates package: `ErrFieldDecryption`
+
+### Changed
+- SPV errors now wrap sentinel errors with context, enabling `errors.Is()` checking instead of string matching
+- Certificate field decryption errors now wrap `ErrFieldDecryption` sentinel
+- Updated tests to use `errors.Is()` instead of `strings.Contains()`
+
+## [1.2.15] - 2026-01-27
+
+### Fixed
+- SPV fee validation now only validates fees on the root transaction, not ancestor transactions in the BEEF chain. Previously, historical ancestors with different fee rates could incorrectly fail validation.
+
+### Added
+- `VarInt.PutBytes()` method for direct buffer writing without allocation
+- `Beef.MergeTransactionWithTxid()` and `Beef.MergeBeefTxWithTxid()` methods to merge transactions without recomputing TxID
+- Test coverage for `VarInt.PutBytes()` method
+
+### Changed
+- Optimized `Transaction.Bytes()`, `Input.Bytes()`, and `Output.Bytes()` methods with pre-calculated size and pre-allocated buffers
+- Optimized BEEF serialization with pre-allocated buffers
+- `LookupFormula.History` now uses `*Beef` type instead of `[]byte`
+
+## [1.2.14] - 2025-12-19
+
+### Added
+- `MerklePath.FindLeafByOffset()` method to find a PathElement at a given offset and level
+- `MerklePath.AddLeaf()` method to add a PathElement to a specified level
+- `MerklePath.ComputeMissingHashes()` method to compute parent hashes from sparse merkle path data
+
+### Changed
+- `Outpoint.Bytes()` now returns 36 bytes in little-endian format (consistent with transaction format)
+- `Outpoint.TxBytes()` is now an alias for `Bytes()` for backward compatibility
+- `NewOutpointFromBytes()` now accepts a `[]byte` slice instead of `[36]byte` array
 
 ## [1.2.13] - 2025-12-05
 

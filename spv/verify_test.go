@@ -4,6 +4,7 @@ package spv
 
 import (
 	"encoding/base64"
+	"errors"
 	"testing"
 
 	"github.com/bsv-blockchain/go-sdk/transaction"
@@ -53,12 +54,12 @@ func TestSPVVerifyWithInsufficientFee(t *testing.T) {
 	require.NoError(t, err)
 
 	feeModel := &feemodel.SatoshisPerKilobyte{
-		Satoshis: 1,
+		Satoshis: 100,
 	}
 
 	ctx := t.Context()
 	verified, err := Verify(ctx, tx, &GullibleHeadersClient{}, feeModel)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "fee is too low")
+	require.True(t, errors.Is(err, ErrFeeTooLow))
 	require.False(t, verified)
 }

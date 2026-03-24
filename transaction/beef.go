@@ -17,14 +17,12 @@ import (
 // It's useful when transporting multiple transactions all at once.
 // Txid only can be used in the case that the recipient already has that tx.
 type Beef struct {
-	Version      uint32
 	BUMPs        []*MerklePath
 	Transactions map[chainhash.Hash]*BeefTx
 }
 
 func NewBeef() *Beef {
 	return &Beef{
-		Version:      BEEF_V2,
 		BUMPs:        []*MerklePath{},
 		Transactions: make(map[chainhash.Hash]*BeefTx),
 	}
@@ -44,19 +42,11 @@ func (t *Transaction) FromBEEF(beef []byte) error {
 }
 
 func NewBeefV1() *Beef {
-	return newEmptyBeef(BEEF_V1)
+	return NewBeef()
 }
 
 func NewBeefV2() *Beef {
-	return newEmptyBeef(BEEF_V2)
-}
-
-func newEmptyBeef(version uint32) *Beef {
-	return &Beef{
-		Version:      version,
-		BUMPs:        []*MerklePath{},
-		Transactions: make(map[chainhash.Hash]*BeefTx),
-	}
+	return NewBeef()
 }
 
 func readBeefTx(reader *bytes.Reader, BUMPs []*MerklePath) (*map[chainhash.Hash]*BeefTx, error) {
@@ -181,7 +171,6 @@ func NewBeefFromBytes(beef []byte) (*Beef, error) {
 		}
 
 		return &Beef{
-			Version:      version,
 			BUMPs:        BUMPs,
 			Transactions: beefTxs,
 		}, nil
@@ -198,7 +187,6 @@ func NewBeefFromBytes(beef []byte) (*Beef, error) {
 	}
 
 	return &Beef{
-		Version:      version,
 		BUMPs:        BUMPs,
 		Transactions: *txs,
 	}, nil
@@ -258,7 +246,7 @@ func NewBeefFromTransaction(t *Transaction) (*Beef, error) {
 	if t == nil {
 		return nil, fmt.Errorf("transaction is nil")
 	}
-	beef := NewBeefV2()
+	beef := NewBeef()
 	bumpMap := map[uint32]int{}
 	txid := t.TxID()
 	txns := map[chainhash.Hash]*Transaction{*txid: t}
@@ -617,11 +605,10 @@ func (b *Beef) MergeBump(bump *MerklePath) int {
 	}
 
 	// review if any transactions are proven by this bump
-	for _, tx := range b.Transactions {
-		txid := tx.Transaction.TxID()
-		if tx.Transaction.MerklePath == nil {
+	for txid, tx := range b.Transactions {
+		if tx.Transaction != nil && tx.Transaction.MerklePath == nil {
 			for _, node := range b.BUMPs[*bumpIndex].Path[0] {
-				if node.Hash != nil && node.Hash.Equal(*txid) {
+				if node.Hash != nil && node.Hash.Equal(txid) {
 					tx.Transaction.MerklePath = b.BUMPs[*bumpIndex]
 					break
 				}
@@ -686,7 +673,7 @@ func (b *Beef) MergeRawTx(rawTx []byte, bumpIndex *int) (*BeefTx, error) {
 	}
 
 	b.Transactions[*txid] = beefTx
-	b.tryToValidateBumpIndex(beefTx)
+	b.tryToValidateBumpIndex(beefTx, txid)
 
 	return beefTx, nil
 }
@@ -698,11 +685,10 @@ func (b *Beef) RemoveExistingTxid(txid *chainhash.Hash) {
 	}
 }
 
-func (b *Beef) tryToValidateBumpIndex(tx *BeefTx) {
+func (b *Beef) tryToValidateBumpIndex(tx *BeefTx, txid *chainhash.Hash) {
 	if tx.DataFormat == TxIDOnly || tx.Transaction == nil || tx.Transaction.MerklePath == nil {
 		return
 	}
-	txid := tx.Transaction.TxID()
 	for _, node := range tx.Transaction.MerklePath.Path[0] {
 		if node.Hash != nil && node.Hash.Equal(*txid) {
 			return
@@ -712,7 +698,11 @@ func (b *Beef) tryToValidateBumpIndex(tx *BeefTx) {
 }
 
 func (b *Beef) MergeTransaction(tx *Transaction) (*BeefTx, error) {
-	txid := tx.TxID()
+	return b.MergeTransactionWithTxid(tx.TxID(), tx)
+}
+
+// MergeTransactionWithTxid merges a transaction when the txid is already known (avoids recomputing TxID)
+func (b *Beef) MergeTransactionWithTxid(txid *chainhash.Hash, tx *Transaction) (*BeefTx, error) {
 	b.RemoveExistingTxid(txid)
 
 	var bumpIndex *int
@@ -731,7 +721,7 @@ func (b *Beef) MergeTransaction(tx *Transaction) (*BeefTx, error) {
 	}
 
 	b.Transactions[*txid] = newTx
-	b.tryToValidateBumpIndex(newTx)
+	b.tryToValidateBumpIndex(newTx, txid)
 
 	if bumpIndex == nil {
 		for _, input := range tx.Inputs {
@@ -778,6 +768,24 @@ func (b *Beef) MergeBeefTx(btx *BeefTx) (*BeefTx, error) {
 	return beefTx, nil
 }
 
+// MergeBeefTxWithTxid merges a BeefTx when the txid is already known (avoids recomputing TxID)
+func (b *Beef) MergeBeefTxWithTxid(txid *chainhash.Hash, btx *BeefTx) (*BeefTx, error) {
+	if btx == nil {
+		return nil, fmt.Errorf("nil BeefTx")
+	}
+	beefTx := b.findTxid(txid)
+	if btx.DataFormat == TxIDOnly && beefTx == nil {
+		beefTx = b.MergeTxidOnly(btx.KnownTxID)
+	} else if btx.Transaction != nil && (beefTx == nil || beefTx.DataFormat == TxIDOnly) {
+		var err error
+		beefTx, err = b.MergeTransactionWithTxid(txid, btx.Transaction)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return beefTx, nil
+}
+
 func (b *Beef) MergeBeefBytes(beef []byte) error {
 	otherBeef, err := NewBeefFromBytes(beef)
 	if err != nil {
@@ -791,8 +799,9 @@ func (b *Beef) MergeBeef(otherBeef *Beef) error {
 		b.MergeBump(bump)
 	}
 
-	for _, tx := range otherBeef.Transactions {
-		if _, err := b.MergeBeefTx(tx); err != nil {
+	for txid, tx := range otherBeef.Transactions {
+		txidCopy := txid
+		if _, err := b.MergeBeefTxWithTxid(&txidCopy, tx); err != nil {
 			return err
 		}
 	}
@@ -1143,7 +1152,6 @@ txLoop:
 // will not affect the original.
 func (b *Beef) Clone() *Beef {
 	c := &Beef{
-		Version:      b.Version,
 		BUMPs:        make([]*MerklePath, len(b.BUMPs)),
 		Transactions: make(map[chainhash.Hash]*BeefTx, len(b.Transactions)),
 	}
@@ -1301,49 +1309,18 @@ func (b *Beef) GetValidTxids() []string {
 // AddComputedLeaves adds leaves that can be computed from row zero to the BUMP MerklePaths.
 func (b *Beef) AddComputedLeaves() {
 	for _, bump := range b.BUMPs {
-		for row := 1; row < len(bump.Path); row++ {
-			for _, leafL := range bump.Path[row-1] {
-				if leafL.Hash != nil && (leafL.Offset&1) == 0 {
-					leafR := findLeafByOffset(bump.Path[row-1], leafL.Offset+1)
-					offsetOnRow := leafL.Offset >> 1
-					if leafR != nil && leafR.Hash != nil && findLeafByOffset(bump.Path[row], offsetOnRow) == nil {
-						bump.Path[row] = append(bump.Path[row], &PathElement{
-							Offset: offsetOnRow,
-							Hash:   MerkleTreeParent(leafL.Hash, leafR.Hash),
-						})
-					}
-				}
-			}
-		}
+		bump.ComputeMissingHashes()
 	}
-}
-
-func findLeafByOffset(leaves []*PathElement, offset uint64) *PathElement {
-	for _, leaf := range leaves {
-		if leaf.Offset == offset {
-			return leaf
-		}
-	}
-	return nil
 }
 
 // Bytes returns the BEEF BRC-96 as a byte slice.
 func (b *Beef) Bytes() ([]byte, error) {
-	// version
-	beef := make([]byte, 0)
-	beef = append(beef, util.LittleEndianBytes(b.Version, 4)...)
-
-	// bumps
-	beef = append(beef, util.VarInt(len(b.BUMPs)).Bytes()...)
-	for _, bump := range b.BUMPs {
-		beef = append(beef, bump.Bytes()...)
-	}
-
-	// transactions / txids
-	beef = append(beef, util.VarInt(len(b.Transactions)).Bytes()...)
+	// First pass: collect all transaction bytes in order and calculate total size
 	txs := make(map[chainhash.Hash]struct{}, len(b.Transactions))
-	var appendTx func(tx *BeefTx) error
-	appendTx = func(tx *BeefTx) error {
+	var orderedTxBytes [][]byte
+
+	var collectTx func(tx *BeefTx) error
+	collectTx = func(tx *BeefTx) error {
 		var txid chainhash.Hash
 		if tx.DataFormat == TxIDOnly {
 			if tx.KnownTxID == nil {
@@ -1359,29 +1336,81 @@ func (b *Beef) Bytes() ([]byte, error) {
 			return nil
 		}
 		if tx.DataFormat == TxIDOnly {
-			beef = append(beef, byte(tx.DataFormat))
-			beef = append(beef, tx.KnownTxID[:]...)
+			txBytes := make([]byte, 1+chainhash.HashSize)
+			txBytes[0] = byte(tx.DataFormat)
+			copy(txBytes[1:], tx.KnownTxID[:])
+			orderedTxBytes = append(orderedTxBytes, txBytes)
 		} else {
 			for _, txin := range tx.Transaction.Inputs {
 				if parentTx := b.findTxid(txin.SourceTXID); parentTx != nil {
-					if err := appendTx(parentTx); err != nil {
+					if err := collectTx(parentTx); err != nil {
 						return err
 					}
 				}
 			}
-			beef = append(beef, byte(tx.DataFormat))
+			rawTxBytes := tx.Transaction.Bytes()
+			var txBytes []byte
 			if tx.DataFormat == RawTxAndBumpIndex {
-				beef = append(beef, util.VarInt(tx.BumpIndex).Bytes()...)
+				bumpIndexBytes := util.VarInt(tx.BumpIndex).Bytes()
+				txBytes = make([]byte, 1+len(bumpIndexBytes)+len(rawTxBytes))
+				txBytes[0] = byte(tx.DataFormat)
+				copy(txBytes[1:], bumpIndexBytes)
+				copy(txBytes[1+len(bumpIndexBytes):], rawTxBytes)
+			} else {
+				txBytes = make([]byte, 1+len(rawTxBytes))
+				txBytes[0] = byte(tx.DataFormat)
+				copy(txBytes[1:], rawTxBytes)
 			}
-			beef = append(beef, tx.Transaction.Bytes()...)
+			orderedTxBytes = append(orderedTxBytes, txBytes)
 		}
 		txs[txid] = struct{}{}
 		return nil
 	}
 	for _, tx := range b.Transactions {
-		if err := appendTx(tx); err != nil {
+		if err := collectTx(tx); err != nil {
 			return nil, err
 		}
+	}
+
+	// Calculate bump bytes
+	bumpBytes := make([][]byte, len(b.BUMPs))
+	bumpsTotalLen := 0
+	for i, bump := range b.BUMPs {
+		bumpBytes[i] = bump.Bytes()
+		bumpsTotalLen += len(bumpBytes[i])
+	}
+
+	// Calculate total size
+	totalLen := 4 // version
+	totalLen += util.VarInt(len(b.BUMPs)).Length() + bumpsTotalLen
+	totalLen += util.VarInt(len(b.Transactions)).Length()
+	for _, txBytes := range orderedTxBytes {
+		totalLen += len(txBytes)
+	}
+
+	// Second pass: write to pre-allocated buffer
+	beef := make([]byte, totalLen)
+	offset := 0
+
+	binary.LittleEndian.PutUint32(beef[offset:], BEEF_V2)
+	offset += 4
+
+	bumpCountBytes := util.VarInt(len(b.BUMPs)).Bytes()
+	copy(beef[offset:], bumpCountBytes)
+	offset += len(bumpCountBytes)
+
+	for _, bb := range bumpBytes {
+		copy(beef[offset:], bb)
+		offset += len(bb)
+	}
+
+	txCountBytes := util.VarInt(len(b.Transactions)).Bytes()
+	copy(beef[offset:], txCountBytes)
+	offset += len(txCountBytes)
+
+	for _, txBytes := range orderedTxBytes {
+		copy(beef[offset:], txBytes)
+		offset += len(txBytes)
 	}
 
 	return beef, nil
@@ -1392,17 +1421,16 @@ func (b *Beef) AtomicBytes(txid *chainhash.Hash) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := make([]byte, 0, 4+chainhash.HashSize+len(beef))
-	result = append(result, util.LittleEndianBytes(ATOMIC_BEEF, 4)...)
-	result = append(result, txid[:]...)
-	result = append(result, beef...)
+	result := make([]byte, 4+chainhash.HashSize+len(beef))
+	binary.LittleEndian.PutUint32(result[0:4], ATOMIC_BEEF)
+	copy(result[4:4+chainhash.HashSize], txid[:])
+	copy(result[4+chainhash.HashSize:], beef)
 
 	return result, nil
 }
 
 func (b *Beef) TxidOnly() (*Beef, error) {
 	c := &Beef{
-		Version:      b.Version,
 		BUMPs:        append([]*MerklePath(nil), b.BUMPs...),
 		Transactions: make(map[chainhash.Hash]*BeefTx, len(b.Transactions)),
 	}
