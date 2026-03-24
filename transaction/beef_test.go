@@ -67,20 +67,11 @@ func TestFromBeefErrorCase(t *testing.T) {
 }
 
 func TestNewEmptyBEEF(t *testing.T) {
-	t.Run("New Beef V1", func(t *testing.T) {
-		v1 := NewBeefV1()
-		beefBytes, err := v1.Bytes()
+	beef := NewBeef()
+	beefBytes, err := beef.Bytes()
 
-		require.NoError(t, err)
-		require.Equal(t, "0100beef0000", hex.EncodeToString(beefBytes))
-	})
-	t.Run("New Beef V2", func(t *testing.T) {
-		v2 := NewBeefV2()
-		beefBytes, err := v2.Bytes()
-
-		require.NoError(t, err)
-		require.Equal(t, "0200beef0000", hex.EncodeToString(beefBytes))
-	})
+	require.NoError(t, err)
+	require.Equal(t, "0200beef0000", hex.EncodeToString(beefBytes))
 }
 
 func TestNewBEEFFromBytes(t *testing.T) {
@@ -93,7 +84,6 @@ func TestNewBEEFFromBytes(t *testing.T) {
 	require.NoError(t, err, "NewBeefFromBytes method failed")
 
 	// Check the Beef object's properties
-	require.Equal(t, uint32(4022206466), beef.Version, "Version does not match")
 	require.Len(t, beef.BUMPs, 3, "BUMPs length does not match")
 	require.Len(t, beef.Transactions, 3, "Transactions length does not match")
 
@@ -291,7 +281,6 @@ func TestBeefClone(t *testing.T) {
 	clone := original.Clone()
 
 	// Verify basic properties match
-	require.Equal(t, original.Version, clone.Version, "Version should match")
 	require.Equal(t, len(original.BUMPs), len(clone.BUMPs), "Number of BUMPs should match")
 	require.Equal(t, len(original.Transactions), len(clone.Transactions), "Number of transactions should match")
 
@@ -333,10 +322,6 @@ func TestBeefClone(t *testing.T) {
 			require.Equal(t, tx.KnownTxID.String(), clonedTx.KnownTxID.String(), "KnownTxID should match")
 		}
 	}
-
-	// Modify clone and verify original is unchanged
-	clone.Version = 999
-	require.NotEqual(t, original.Version, clone.Version, "Modifying clone should not affect original")
 
 	// Remove a transaction from clone and verify original is unchanged
 	for txid := range clone.Transactions {
@@ -834,7 +819,6 @@ func TestBeefMergeBeefTx(t *testing.T) {
 		}
 
 		beef := &Beef{
-			Version:      BEEF_V2,
 			BUMPs:        make([]*MerklePath, 0),
 			Transactions: make(map[chainhash.Hash]*BeefTx),
 		}
@@ -852,7 +836,6 @@ func TestBeefMergeBeefTx(t *testing.T) {
 
 	t.Run("handle nil transaction", func(t *testing.T) {
 		beef := &Beef{
-			Version:      BEEF_V2,
 			BUMPs:        make([]*MerklePath, 0),
 			Transactions: make(map[chainhash.Hash]*BeefTx),
 		}
@@ -867,7 +850,6 @@ func TestBeefMergeBeefTx(t *testing.T) {
 
 	t.Run("handle BeefTx with nil Transaction", func(t *testing.T) {
 		beef := &Beef{
-			Version:      BEEF_V2,
 			BUMPs:        make([]*MerklePath, 0),
 			Transactions: make(map[chainhash.Hash]*BeefTx),
 		}
@@ -889,7 +871,6 @@ func TestBeefMergeBeefTx(t *testing.T) {
 func TestBeefFindAtomicTransactionWithSourceTransactions(t *testing.T) {
 	// Create a BEEF object with transactions that have source transactions
 	beef := &Beef{
-		Version:      BEEF_V2,
 		BUMPs:        make([]*MerklePath, 0),
 		Transactions: make(map[chainhash.Hash]*BeefTx),
 	}
@@ -956,7 +937,6 @@ func TestBeefFindAtomicTransactionWithSourceTransactions(t *testing.T) {
 func TestBeefMergeTxidOnly(t *testing.T) {
 	// Create a BEEF object
 	beef := &Beef{
-		Version:      BEEF_V2,
 		BUMPs:        make([]*MerklePath, 0),
 		Transactions: make(map[chainhash.Hash]*BeefTx),
 	}
@@ -989,7 +969,6 @@ func TestBeefMergeTxidOnly(t *testing.T) {
 func TestBeefFindBumpWithNilBumpIndex(t *testing.T) {
 	// Create a BEEF object
 	beef := &Beef{
-		Version:      BEEF_V2,
 		BUMPs:        make([]*MerklePath, 0),
 		Transactions: make(map[chainhash.Hash]*BeefTx),
 	}
@@ -1040,7 +1019,6 @@ func TestBeefBytes(t *testing.T) {
 	t.Run("serialize and deserialize", func(t *testing.T) {
 		// Create a BEEF object with different types of transactions
 		beef := &Beef{
-			Version:      BEEF_V2,
 			BUMPs:        make([]*MerklePath, 0),
 			Transactions: make(map[chainhash.Hash]*BeefTx),
 		}
@@ -1094,7 +1072,6 @@ func TestBeefBytes(t *testing.T) {
 		// Deserialize and verify
 		beef2, err := NewBeefFromBytes(bytes)
 		require.NoError(t, err)
-		require.Equal(t, beef.Version, beef2.Version)
 		require.Equal(t, len(beef.BUMPs), len(beef2.BUMPs))
 		require.Equal(t, len(beef.Transactions), len(beef2.Transactions))
 
@@ -1113,7 +1090,6 @@ func TestBeefBytes(t *testing.T) {
 func TestBeefAddComputedLeaves(t *testing.T) {
 	// Create a BEEF object with a BUMP that has incomplete leaves
 	beef := &Beef{
-		Version:      BEEF_V2,
 		BUMPs:        make([]*MerklePath, 0),
 		Transactions: make(map[chainhash.Hash]*BeefTx),
 	}

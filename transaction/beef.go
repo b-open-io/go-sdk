@@ -17,14 +17,12 @@ import (
 // It's useful when transporting multiple transactions all at once.
 // Txid only can be used in the case that the recipient already has that tx.
 type Beef struct {
-	Version      uint32
 	BUMPs        []*MerklePath
 	Transactions map[chainhash.Hash]*BeefTx
 }
 
 func NewBeef() *Beef {
 	return &Beef{
-		Version:      BEEF_V2,
 		BUMPs:        []*MerklePath{},
 		Transactions: make(map[chainhash.Hash]*BeefTx),
 	}
@@ -44,19 +42,11 @@ func (t *Transaction) FromBEEF(beef []byte) error {
 }
 
 func NewBeefV1() *Beef {
-	return newEmptyBeef(BEEF_V1)
+	return NewBeef()
 }
 
 func NewBeefV2() *Beef {
-	return newEmptyBeef(BEEF_V2)
-}
-
-func newEmptyBeef(version uint32) *Beef {
-	return &Beef{
-		Version:      version,
-		BUMPs:        []*MerklePath{},
-		Transactions: make(map[chainhash.Hash]*BeefTx),
-	}
+	return NewBeef()
 }
 
 func readBeefTx(reader *bytes.Reader, BUMPs []*MerklePath) (*map[chainhash.Hash]*BeefTx, error) {
@@ -181,7 +171,6 @@ func NewBeefFromBytes(beef []byte) (*Beef, error) {
 		}
 
 		return &Beef{
-			Version:      version,
 			BUMPs:        BUMPs,
 			Transactions: beefTxs,
 		}, nil
@@ -198,7 +187,6 @@ func NewBeefFromBytes(beef []byte) (*Beef, error) {
 	}
 
 	return &Beef{
-		Version:      version,
 		BUMPs:        BUMPs,
 		Transactions: *txs,
 	}, nil
@@ -258,7 +246,7 @@ func NewBeefFromTransaction(t *Transaction) (*Beef, error) {
 	if t == nil {
 		return nil, fmt.Errorf("transaction is nil")
 	}
-	beef := NewBeefV2()
+	beef := NewBeef()
 	bumpMap := map[uint32]int{}
 	txid := t.TxID()
 	txns := map[chainhash.Hash]*Transaction{*txid: t}
@@ -1164,7 +1152,6 @@ txLoop:
 // will not affect the original.
 func (b *Beef) Clone() *Beef {
 	c := &Beef{
-		Version:      b.Version,
 		BUMPs:        make([]*MerklePath, len(b.BUMPs)),
 		Transactions: make(map[chainhash.Hash]*BeefTx, len(b.Transactions)),
 	}
@@ -1405,7 +1392,7 @@ func (b *Beef) Bytes() ([]byte, error) {
 	beef := make([]byte, totalLen)
 	offset := 0
 
-	binary.LittleEndian.PutUint32(beef[offset:], b.Version)
+	binary.LittleEndian.PutUint32(beef[offset:], BEEF_V2)
 	offset += 4
 
 	bumpCountBytes := util.VarInt(len(b.BUMPs)).Bytes()
@@ -1444,7 +1431,6 @@ func (b *Beef) AtomicBytes(txid *chainhash.Hash) ([]byte, error) {
 
 func (b *Beef) TxidOnly() (*Beef, error) {
 	c := &Beef{
-		Version:      b.Version,
 		BUMPs:        append([]*MerklePath(nil), b.BUMPs...),
 		Transactions: make(map[chainhash.Hash]*BeefTx, len(b.Transactions)),
 	}
